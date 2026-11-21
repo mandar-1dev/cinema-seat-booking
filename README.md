@@ -47,6 +47,10 @@ cinema/
 
 ## Setup
 
+Copy `.env.example` to `.env` and configure it for your environment. MongoDB
+Atlas and Razorpay credentials are optional during local infrastructure setup,
+but all persistent and payment features require them.
+
 ```bash
 # 1. Start Redis (and Redis Commander GUI at http://localhost:8081)
 docker compose up -d
@@ -59,6 +63,17 @@ go run .
 ```
 
 Open **http://localhost:8080** for the UI.
+
+For the React development UI:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The Vite server runs at `http://localhost:5173` and proxies Go API routes to
+`http://localhost:8080`.
 
 ## Running tests
 
@@ -77,6 +92,58 @@ go test ./... -run TestConcurrentBooking -v
 | POST   | `/movies/{movieID}/seats/{seatID}/hold`    | `{"user_id": "..."}`  | Hold a seat (2 min TTL)    |
 | PUT    | `/sessions/{sessionID}/confirm`            | `{"user_id": "..."}`  | Confirm a held seat        |
 | DELETE | `/sessions/{sessionID}`                    | `{"user_id": "..."}`  | Release a held seat        |
+
+When MongoDB and JWT are configured:
+
+| Method | Path | Body | Description |
+|--------|------|------|-------------|
+| POST | `/auth/register` | Registration JSON | Create a customer account |
+| POST | `/auth/login` | Email/password JSON | Issue access and refresh JWTs |
+| POST | `/auth/refresh` | `{"refresh_token":"..."}` | Refresh an access token |
+| GET | `/auth/me` | — | Get the authenticated user profile |
+| PUT | `/auth/me` | Profile JSON | Update the authenticated profile |
+| GET | `/catalog/movies` | — | List persisted movies |
+| GET | `/catalog/theatres?city=` | — | List theatres, optionally filtered by city |
+| GET | `/catalog/shows?movie_id=&theatre_id=&date=` | — | List persisted shows |
+
+Payment routes, when Razorpay is configured:
+
+| Method | Path | Authentication | Description |
+|--------|------|----------------|-------------|
+| POST | `/payments/orders` | Bearer access token | Create a real Razorpay test order |
+| POST | `/payments/verify` | Bearer access token | Verify the Razorpay payment signature |
+| POST | `/payments/webhooks/razorpay` | Razorpay signature | Receive provider webhook events |
+
+The checkout only confirms a booking after Razorpay signature verification; it
+does not report an unavailable or failed payment as successful. After successful
+verification, customers can download a compact PDF ticket containing the
+ticket QR and booking details. The current demo UI's showtime and cinema are
+static placeholders until a real show is selected from the persisted catalog.
+
+For Razorpay sandbox checkout, create a Test Mode key pair in the Razorpay
+Dashboard and set `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` in the local
+`.env` file. Use the `rzp_test_` key ID and restart the Go server. Do not paste
+the secret into source files or commit `.env`. A valid entry QR is issued only
+after the server verifies the payment signature and confirms the captured
+payment with Razorpay.
+
+### Demo checkout
+
+Select **Demo mode** beside Sign in, enter a billing name, choose a seat, and
+complete the clearly labeled simulated checkout. It makes no charge and does
+not require Razorpay. Demo payment records and passes are stored separately in
+MongoDB's `demo_payments` and `demo_passes` collections. Prices are calculated
+by the server from the demo menu.
+
+Demo QR codes are signed and can be checked with `POST /demo/tickets/verify`
+using `{"ticket_id":"..."}`. The response explicitly marks them as demo-only
+and `valid_for_entry: false`. They are isolated from the real `/tickets/verify`
+and `/tickets/use` endpoints, and the downloadable PDF is marked **NOT VALID
+FOR ENTRY**. This mode is for exercising the checkout UI only; it does not
+create a paid or real admission ticket.
+
+Real-time seat updates are available through:
+`ws://localhost:8080/ws/seats/{movieID}`.
 
 `user_id` must match the user who created the session, or `Confirm`/`Release`
 return `403 Forbidden` — this is what stops someone else from cancelling or

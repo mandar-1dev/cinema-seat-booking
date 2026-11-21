@@ -15,12 +15,12 @@ var (
 // Booking represents a seat reservation. Status is "held" while a user is
 // mid-checkout, and becomes "confirmed" once they finalize it.
 type Booking struct {
-	ID        string
-	MovieID   string
-	SeatID    string
-	UserID    string
-	Status    string
-	ExpiresAt time.Time
+	ID        string    `json:"id" bson:"_id"`
+	MovieID   string    `json:"movie_id" bson:"movie_id"`
+	SeatID    string    `json:"seat_id" bson:"seat_id"`
+	UserID    string    `json:"user_id" bson:"user_id"`
+	Status    string    `json:"status" bson:"status"`
+	ExpiresAt time.Time `json:"expires_at,omitempty" bson:"expires_at,omitempty"`
 }
 
 // BookingStore is implemented by RedisStore (production), MemoryStore
